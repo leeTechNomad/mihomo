@@ -1,0 +1,67 @@
+name: XUDP Windows build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xudp-windows
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout patch branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/xudp-relay-known-destination
+          fetch-depth: 0
+
+      - name: Rebase onto upstream Alpha
+        run: |
+          git config user.name lee
+          git config user.email "150812555+leeTechNomad@users.noreply.github.com"
+          git fetch --no-tags https://github.com/MetaCubeX/mihomo.git Alpha
+          git rebase FETCH_HEAD
+          git push --force-with-lease origin HEAD:fix/xudp-relay-known-destination
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Build Windows exe
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+          GOAMD64: v1
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          go build -tags with_gvisor -trimpath \
+            -ldflags "-s -w -buildid= -X github.com/metacubex/mihomo/constant.Version=xudp-${sha}" \
+            -o verge-mihomo.exe
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verge-mihomo-windows-amd64
+          path: verge-mihomo.exe
+          if-no-files-found: error
+
+      - name: Publish rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="Built from $(git rev-parse --short HEAD) on $(date -u +%Y-%m-%dT%H:%MZ)."
+          gh release delete xudp-windows --yes --cleanup-tag || true
+          gh release create xudp-windows verge-mihomo.exe \
+            --prerelease \
+            --target fix/xudp-relay-known-destination \
+            --title "XUDP Windows build" \
+            --notes "$notes"
