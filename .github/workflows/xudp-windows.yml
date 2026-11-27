@@ -3,7 +3,8 @@ name: XUDP Windows build
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 12 * * *"
+    # 00:00, 08:00, 16:00 UTC. Beijing time is 08:00, 16:00, and 00:00.
+    - cron: "0 */8 * * *"
 
 permissions:
   contents: write
